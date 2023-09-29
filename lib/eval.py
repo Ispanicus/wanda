@@ -9,7 +9,7 @@ from .data import get_loaders
 # Function to evaluate perplexity (ppl) on a specified model and tokenizer
 def eval_ppl(model, tokenizer, device=torch.device("cuda:0")):
     # Set dataset
-    dataset = "wikitext2"
+    dataset = "Spanish wikipedia"
 
     # Print status
     print(f"evaluating on {dataset}")
@@ -23,7 +23,7 @@ def eval_ppl(model, tokenizer, device=torch.device("cuda:0")):
     with torch.no_grad():
         ppl_test = eval_ppl_wikitext(model, testloader, 1, device)
         ppl_train = eval_ppl_wikitext_train(model, trainloader, 1, device)
-    return ppl_train, ppl_test 
+    return ppl_train, ppl_test
 
 # Function to evaluate perplexity (ppl) specifically on the wikitext dataset
 def eval_ppl_wikitext_train(model, trainloader, bs=1, device=None):

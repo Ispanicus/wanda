@@ -1,0 +1,6 @@
+ python main.py  \
+	--model bigscience/bloom-560m \
+    --prune_method magnitude    \
+	--sparsity_ratio 0.1    \
+	--sparsity_type unstructured    \
+	--save out/bloom-560m/unstructured/magnitude/

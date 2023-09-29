@@ -22,7 +22,10 @@ def get_llm(model_name, cache_dir="llm_weights"):
         device_map="auto"
     )
 
-    model.seqlen = model.config.max_position_embeddings 
+    if "bloom" in model_name:
+        model.seqlen = 2048
+    else:
+        model.seqlen = model.config.max_position_embeddings 
     return model
 
 def main():
@@ -53,12 +56,16 @@ def main():
     print(f"loading llm model {args.model}")
     model = get_llm(args.model, args.cache_dir)
     model.eval()
+
     tokenizer = AutoTokenizer.from_pretrained(args.model, use_fast=False)
 
     device = torch.device("cuda:0")
     if "30b" in args.model or "65b" in args.model: # for 30b and 65b we use device_map to load onto multiple A6000 GPUs, thus the processing here.
         device = model.hf_device_map["lm_head"]
     print("use device ", device)
+
+
+    orig_ppl_train, orig_ppl_test = eval_ppl(model, tokenizer, device)
 
     if args.sparsity_ratio != 0:
         print("pruning starts")
@@ -78,7 +85,8 @@ def main():
     print("*"*30)
     ################################################################
     ppl_train, ppl_test = eval_ppl(model, tokenizer, device)
-    print(f"ppl on wikitext_train {ppl_train}, wikitext_test {ppl_test}")
+    print(f"original ppl on wikipedia_train {orig_ppl_train}, wikipedia_test {orig_ppl_test}")
+    print(f"ppl on wikipedia_train {ppl_train}, wikipedia_test {ppl_test}")
 
     if not os.path.exists(args.save):
         os.makedirs(args.save)
