@@ -1,10 +1,84 @@
 # Import necessary modules
-import time
+import csv
+from datasets import load_dataset
+import numpy as np
+import random
 import torch
+from tqdm import tqdm
+from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline, set_seed
+
+import time
 import torch.nn as nn
 
 # Import get_loaders function from data module within the same directory
 from .data import get_loaders 
+
+def eval_belebele(model_directory='../pruned_models/bloom-560m/magnitude0.2', BATCH_SIZE=4):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Set seeds for reproducibility
+    seed_value = 42 
+    random.seed(seed_value)
+    np.random.seed(seed_value)
+    torch.manual_seed(seed_value)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed_value)
+        torch.cuda.manual_seed_all(seed_value)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    set_seed(seed_value)
+
+    dataset = load_dataset("facebook/belebele", "spa_Latn", split='test')
+    model = AutoModelForCausalLM.from_pretrained(model_directory).to(device)
+    tokenizer = AutoTokenizer.from_pretrained(model_directory)
+    eos_token_id = tokenizer.eos_token_id
+
+    answers = dict()
+    num_rows = dataset.num_rows
+    input_texts = []
+
+    for i in tqdm(range(num_rows)):
+        passage = dataset['flores_passage'][i]
+        question = dataset['question'][i]
+        answer_a = dataset['mc_answer1'][i]
+        answer_b = dataset['mc_answer2'][i]
+        answer_c = dataset['mc_answer3'][i]
+        answer_d = dataset['mc_answer4'][i]
+        input_text = f'''
+        {passage}
+        {question}
+        A: {answer_a}
+        B: {answer_b}
+        C: {answer_c}
+        D: {answer_d}
+        Selecciona la letra correcta
+        Respuesta: '''
+        input_texts.append(input_text)
+
+        if (i+1) % BATCH_SIZE == 0 or i == num_rows - 1:
+            input_ids = tokenizer.batch_encode_plus(input_texts, return_tensors='pt', padding=True, truncation=True)['input_ids'].to(device)
+
+            output_ids_batch = model.generate(
+                input_ids,
+                max_length=max([len(ids) for ids in input_ids]) + 10,  # adjust for each batch
+                num_return_sequences=1,
+                eos_token_id=eos_token_id,
+                early_stopping=True,
+            )
+
+            for j, output_ids in enumerate(output_ids_batch):
+                generated_tokens = output_ids[len(input_ids[j]):]
+                generated_text = tokenizer.decode(generated_tokens, skip_special_tokens=True)
+                answers[i - BATCH_SIZE + j + 1] = (generated_text, dataset['correct_answer_num'][i - BATCH_SIZE + j + 1])
+
+            # Reset input_texts for the next batch
+            input_texts = []
+
+    with open(f'../{model_directory}/belebele.csv', 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(['ID', 'Answer', 'Label'])
+        for key, value in answers.items():
+            writer.writerow([key] + list(value))
 
 # Function to evaluate perplexity (ppl) on a specified model and tokenizer
 def eval_ppl(model, tokenizer, device=torch.device("cuda:0")):

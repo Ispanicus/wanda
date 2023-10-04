@@ -1,4 +1,7 @@
 /*__pycache__/
+llm_weights
+pruned_models
+out
 .env
 *.pyc
 *.DS_Store
