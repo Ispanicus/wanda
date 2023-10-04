@@ -95,10 +95,10 @@ def main():
     #print(f"original ppl on wikipedia_train {orig_ppl_train}, wikipedia_test {orig_ppl_test}")
     #print(f"ppl on wikipedia_train {ppl_train}, wikipedia_test {ppl_test}")
 
-    if not os.path.exists(args.save):
-        os.makedirs(args.save)
-    save_filepath = os.path.join(args.save, f"log_{args.prune_method}.txt")
-
+#    if not os.path.exists(args.save):
+#        os.makedirs(args.save)
+#    save_filepath = os.path.join(args.save, f"log_{args.prune_method}.txt")
+#
 #    with open(save_filepath, "w") as f:
 #        if "ablate" in args.prune_method:
 #            print("method\tactual_sparsity\tppl_train\tppl_test", file=f, flush=True)
@@ -108,6 +108,14 @@ def main():
 #            print(f"{args.prune_method}\t{sparsity_ratio:.4f}\t{ppl_test:.4f}", file=f, flush=True)
 
     if args.save_model:
+        if args.quantize:
+            print("removing string parameters from quantized model to allow saving")
+            model_state = model.state_dict()
+            keys_to_remove = [key for key in model_state if key.endswith("_weight_format")]
+            for key in keys_to_remove:
+                del model_state[key]
+            model.load_state_dict(model_state)
+            model.save_pretrained('path_to_save')
         model.save_pretrained(args.save_model)
         tokenizer.save_pretrained(args.save_model)
 
