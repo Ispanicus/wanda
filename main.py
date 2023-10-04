@@ -11,15 +11,17 @@ from lib.eval import eval_ppl
 print('torch', version('torch'))
 print('transformers', version('transformers'))
 print('accelerate', version('accelerate'))
+print('bitsandbytes', version('bitsandbytes'))
 print('# of gpus: ', torch.cuda.device_count())
 
-def get_llm(model_name, cache_dir="llm_weights"):
+def get_llm(model_name, quantize=False):
+
     model = AutoModelForCausalLM.from_pretrained(
         model_name, 
-        torch_dtype=torch.float16, 
-        cache_dir=cache_dir, 
-        low_cpu_mem_usage=True, 
-        device_map="auto"
+        torch_dtype=torch.float16,
+        low_cpu_mem_usage=True,
+        device_map="auto",
+        load_in_8bit=quantize,
     )
 
     if "bloom" in model_name:
@@ -40,6 +42,7 @@ def main():
     parser.add_argument('--use_variant', action="store_true", help="whether to use the wanda variant described in the appendix")
     parser.add_argument('--save', type=str, default=None, help='Path to save results.')
     parser.add_argument('--save_model', type=str, default=None, help='Path to save the pruned model.')
+    parser.add_argument('--quantize', type=int, default=0, help='Desired bit quantization')
     args = parser.parse_args()
 
     # Setting seeds for reproducibility
@@ -54,7 +57,10 @@ def main():
 
     model_name = args.model.split("/")[-1]
     print(f"loading llm model {args.model}")
-    model = get_llm(args.model, args.cache_dir)
+    if args.quantize:
+        model = get_llm(args.model, quantize=True)
+    else:
+        model = get_llm(args.model)#, args.cache_dir)
     model.eval()
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, use_fast=False)
@@ -65,7 +71,7 @@ def main():
     print("use device ", device)
 
 
-    orig_ppl_train, orig_ppl_test = eval_ppl(model, tokenizer, device)
+    # orig_ppl_train, orig_ppl_test = eval_ppl(model, tokenizer, device)
 
     if args.sparsity_ratio != 0:
         print("pruning starts")
@@ -84,20 +90,21 @@ def main():
     print(f"sparsity sanity check {sparsity_ratio:.4f}")
     print("*"*30)
     ################################################################
-    ppl_train, ppl_test = eval_ppl(model, tokenizer, device)
-    print(f"original ppl on wikipedia_train {orig_ppl_train}, wikipedia_test {orig_ppl_test}")
-    print(f"ppl on wikipedia_train {ppl_train}, wikipedia_test {ppl_test}")
+    #ppl_train, ppl_test = eval_ppl(model, tokenizer, device)
+    #print(f"original ppl on wikipedia_train {orig_ppl_train}, wikipedia_test {orig_ppl_test}")
+    #print(f"ppl on wikipedia_train {ppl_train}, wikipedia_test {ppl_test}")
 
     if not os.path.exists(args.save):
         os.makedirs(args.save)
     save_filepath = os.path.join(args.save, f"log_{args.prune_method}.txt")
-    with open(save_filepath, "w") as f:
-        if "ablate" in args.prune_method:
-            print("method\tactual_sparsity\tppl_train\tppl_test", file=f, flush=True)
-            print(f"{args.prune_method}\t{sparsity_ratio:.4f}\t{ppl_train:.4f}\t{ppl_test:.4f}", file=f, flush=True)
-        else:
-            print("method\tactual_sparsity\tppl_test", file=f, flush=True)
-            print(f"{args.prune_method}\t{sparsity_ratio:.4f}\t{ppl_test:.4f}", file=f, flush=True)
+
+#    with open(save_filepath, "w") as f:
+#        if "ablate" in args.prune_method:
+#            print("method\tactual_sparsity\tppl_train\tppl_test", file=f, flush=True)
+#            print(f"{args.prune_method}\t{sparsity_ratio:.4f}\t{ppl_train:.4f}\t{ppl_test:.4f}", file=f, flush=True)
+#        else:
+#            print("method\tactual_sparsity\tppl_test", file=f, flush=True)
+#            print(f"{args.prune_method}\t{sparsity_ratio:.4f}\t{ppl_test:.4f}", file=f, flush=True)
 
     if args.save_model:
         model.save_pretrained(args.save_model)

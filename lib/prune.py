@@ -1,14 +1,15 @@
 import time 
 import heapq 
 import torch 
-import torch.nn as nn 
+import torch.nn as nn
+import bitsandbytes
 from .sparsegpt import SparseGPT 
 from .layerwrapper import WrappedGPT
 from .data import get_loaders 
 
 from .ablate import AblateGPT 
 
-def find_layers(module, layers=[nn.Linear], name=''):
+def find_layers(module, layers={nn.Linear, bitsandbytes.nn.Linear8bitLt}, name=''):
     """
     Recursively find the layers of a certain type in a module.
 
@@ -74,7 +75,7 @@ def check_sparsity(model):
             print(f"layer {i} sparsity {float(sub_count)/sub_params:.6f}")
 
     model.config.use_cache = use_cache 
-    return float(count)/total_params 
+    return float(count)/total_params
 
 def prepare_calibration_input(model, dataloader, device):
     use_cache = model.config.use_cache
