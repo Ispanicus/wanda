@@ -14,11 +14,12 @@ print('accelerate', version('accelerate'))
 print('bitsandbytes', version('bitsandbytes'))
 print('# of gpus: ', torch.cuda.device_count())
 
-def get_llm(model_name, quantize=False):
+def get_llm(model_name, cache_dir="llm_weights", quantize=False):
 
     model = AutoModelForCausalLM.from_pretrained(
         model_name, 
         torch_dtype=torch.float16,
+        cache_dir=cache_dir,
         low_cpu_mem_usage=True,
         device_map="auto",
         load_in_8bit=quantize,
@@ -58,9 +59,9 @@ def main():
     model_name = args.model.split("/")[-1]
     print(f"loading llm model {args.model}")
     if args.quantize:
-        model = get_llm(args.model, quantize=True)
+        model = get_llm(args.model, args.cache_dir, quantize=True)
     else:
-        model = get_llm(args.model)#, args.cache_dir)
+        model = get_llm(args.model, args.cache_dir)
     model.eval()
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, use_fast=False)
