@@ -44,15 +44,25 @@ def eval_belebele(model_directory='../pruned_models/bloom-560m/magnitude0.2', BA
         answer_b = dataset['mc_answer2'][i]
         answer_c = dataset['mc_answer3'][i]
         answer_d = dataset['mc_answer4'][i]
+
         input_text = f'''
+        Lee el siguiente texto y responde a la pregunta.
+
+        Texto:
         {passage}
+
+        Pregunta:
         {question}
-        A: {answer_a}
-        B: {answer_b}
-        C: {answer_c}
-        D: {answer_d}
-        Selecciona la letra correcta
+
+        A) {answer_a}
+        B) {answer_b}
+        C) {answer_c}
+        D) {answer_d}
+
+        ¿Cuál es la respuesta correcta: A, B, C o D?
+
         Respuesta: '''
+
         input_texts.append(input_text)
 
         if (i+1) % BATCH_SIZE == 0 or i == num_rows - 1:
