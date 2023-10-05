@@ -9,7 +9,7 @@ from typing import Dict, Union, Tuple
 from importlib.metadata import version
 
 from lib.prune import prune_wanda, prune_magnitude, prune_sparsegpt, prune_ablate, check_sparsity, find_layers
-from lib.eval import eval_ppl
+from lib.eval import eval_belebele
 
 print('torch', version('torch'))
 print('transformers', version('transformers'))
@@ -181,6 +181,17 @@ def main():
             modeling_utils.shard_checkpoint = custom_shard_checkpoint
         model.save_pretrained(args.save_model)
         tokenizer.save_pretrained(args.save_model)
+    
+    model_path = model.config.name_or_path
+
+    # Chooses batch size for different model sizes
+    batch_size = next((size for name, size in {
+        'bloom-560m': 4,
+        'bloom-3b': 2,
+        'bloom-7b1': 1
+    }.items() if name in model_path), 1)
+
+    eval_belebele(model, tokenizer, BATCH_SIZE=batch_size, quantized=bool(args.quantize))
 
 if __name__ == '__main__':
     main()

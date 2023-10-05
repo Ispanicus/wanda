@@ -13,8 +13,8 @@ import torch.nn as nn
 # Import get_loaders function from data module within the same directory
 from .data import get_loaders 
 
-def eval_belebele(model_directory='../pruned_models/bloom-560m/magnitude0.2', BATCH_SIZE=4, quantized=False):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def eval_belebele(model, tokenizer, BATCH_SIZE=4, quantized=False):
+    #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Set seeds for reproducibility
     seed_value = 42 
@@ -29,10 +29,10 @@ def eval_belebele(model_directory='../pruned_models/bloom-560m/magnitude0.2', BA
     set_seed(seed_value)
 
     dataset = load_dataset("facebook/belebele", "spa_Latn", split='test')
-    model = AutoModelForCausalLM.from_pretrained(model_directory)
-    if not quantized:
-        model = model.to(device)
-    tokenizer = AutoTokenizer.from_pretrained(model_directory)
+    #model = AutoModelForCausalLM.from_pretrained(model_directory)
+    #if not quantized:
+    #    model = model.to(device)
+    #tokenizer = AutoTokenizer.from_pretrained(model_directory)
     eos_token_id = tokenizer.eos_token_id
 
     answers = dict()
@@ -86,7 +86,7 @@ def eval_belebele(model_directory='../pruned_models/bloom-560m/magnitude0.2', BA
             # Reset input_texts for the next batch
             input_texts = []
 
-    with open(f'../{model_directory}/belebele.csv', 'w', newline='') as csvfile:
+    with open(f'{model.config.name_or_path}/belebele.csv', 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(['ID', 'Answer', 'Label'])
         for key, value in answers.items():
