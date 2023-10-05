@@ -3,6 +3,7 @@ import heapq
 import torch 
 import torch.nn as nn
 import bitsandbytes
+from tqdm import tqdm
 from .sparsegpt import SparseGPT 
 from .layerwrapper import WrappedGPT
 from .data import get_loaders 
@@ -127,7 +128,7 @@ def return_given_alpha(alpha, sort_res, W_metric, tmp_metric, sum_before):
 def prune_magnitude(args, model, tokenizer, device=torch.device("cuda:0"), prune_n=0, prune_m=0):
     if "bloom" in args.model:
         layers = model.transformer.modules()
-        for i, layer in enumerate(layers):
+        for i, layer in enumerate(tqdm(layers)):
             subset = find_layers(layer)
 
             for name in subset:
