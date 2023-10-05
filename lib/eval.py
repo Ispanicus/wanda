@@ -13,7 +13,7 @@ import torch.nn as nn
 # Import get_loaders function from data module within the same directory
 from .data import get_loaders 
 
-def eval_belebele(model_directory='../pruned_models/bloom-560m/magnitude0.2', BATCH_SIZE=4):
+def eval_belebele(model_directory='../pruned_models/bloom-560m/magnitude0.2', BATCH_SIZE=4, quantized=False):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Set seeds for reproducibility
@@ -29,7 +29,9 @@ def eval_belebele(model_directory='../pruned_models/bloom-560m/magnitude0.2', BA
     set_seed(seed_value)
 
     dataset = load_dataset("facebook/belebele", "spa_Latn", split='test')
-    model = AutoModelForCausalLM.from_pretrained(model_directory).to(device)
+    model = AutoModelForCausalLM.from_pretrained(model_directory)
+    if not quantized:
+        model = model.to(device)
     tokenizer = AutoTokenizer.from_pretrained(model_directory)
     eos_token_id = tokenizer.eos_token_id
 
