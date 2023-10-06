@@ -68,7 +68,7 @@ def eval_belebele(model, tokenizer, BATCH_SIZE=4, quantized=False):
         input_texts.append(input_text)
 
         if (i+1) % BATCH_SIZE == 0 or i == num_rows - 1:
-            input_ids = tokenizer.batch_encode_plus(input_texts, return_tensors='pt', padding=True, truncation=True)['input_ids'].to(device)
+            input_ids = tokenizer.batch_encode_plus(input_texts, return_tensors='pt', padding=True)['input_ids'].to(device)
 
             output_ids_batch = model.generate(
                 input_ids,

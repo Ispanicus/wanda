@@ -195,7 +195,7 @@ def main():
 
     answers = eval_belebele(model, tokenizer, BATCH_SIZE=batch_size, quantized=bool(args.quantize))
 
-    with open(args.save_model, 'w', newline='') as csvfile:
+    with open(f'{args.save_model}/belebele.csv', 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(['ID', 'Answer', 'Label'])
         for key, value in answers.items():
