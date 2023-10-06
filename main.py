@@ -1,4 +1,5 @@
 import argparse
+import csv
 import os 
 import numpy as np
 import torch
@@ -187,11 +188,18 @@ def main():
     # Chooses batch size for different model sizes
     batch_size = next((size for name, size in {
         'bloom-560m': 4,
+        'bloom-1b7': 4,
         'bloom-3b': 2,
         'bloom-7b1': 1
     }.items() if name in model_path), 1)
 
-    eval_belebele(model, tokenizer, BATCH_SIZE=batch_size, quantized=bool(args.quantize))
+    answers = eval_belebele(model, tokenizer, BATCH_SIZE=batch_size, quantized=bool(args.quantize))
+
+    with open(args.save_model, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(['ID', 'Answer', 'Label'])
+        for key, value in answers.items():
+            writer.writerow([key] + list(value))
 
 if __name__ == '__main__':
     main()

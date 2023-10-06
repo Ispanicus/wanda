@@ -1,5 +1,4 @@
 # Import necessary modules
-import csv
 from datasets import load_dataset
 import numpy as np
 import random
@@ -87,11 +86,7 @@ def eval_belebele(model, tokenizer, BATCH_SIZE=4, quantized=False):
             # Reset input_texts for the next batch
             input_texts = []
 
-    with open(f'{model.config.name_or_path}/belebele.csv', 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(['ID', 'Answer', 'Label'])
-        for key, value in answers.items():
-            writer.writerow([key] + list(value))
+    return answers
 
 # Function to evaluate perplexity (ppl) on a specified model and tokenizer
 def eval_ppl(model, tokenizer, device=torch.device("cuda:0")):
