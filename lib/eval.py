@@ -74,6 +74,8 @@ def eval_belebele(model, tokenizer, BATCH_SIZE=4, quantized=False):
                 input_ids,
                 max_length=max([len(ids) for ids in input_ids]) + 10,  # adjust for each batch
                 num_return_sequences=1,
+                top_k=1,
+                temperature=1,
                 eos_token_id=eos_token_id,
                 early_stopping=True,
             )

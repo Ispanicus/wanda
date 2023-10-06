@@ -33,8 +33,8 @@ def get_wikipedia(nsamples, seed, seqlen, tokenizer):
     filtered_dataset = traindata.select(indices)
 
     # Encode datasets
-    trainenc = tokenizer(" ".join(filtered_dataset['text'][:100]), return_tensors='pt')
-    testenc = tokenizer("\n\n".join(filtered_dataset['text'][-100:]), return_tensors='pt')
+    trainenc = tokenizer(" ".join(filtered_dataset['text'][:200]), return_tensors='pt')
+    testenc = tokenizer("\n\n".join(filtered_dataset['text'][-200:]), return_tensors='pt')
 
     # Generate samples from training set
     random.seed(seed)
