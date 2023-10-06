@@ -14,7 +14,8 @@ import torch.nn as nn
 from .data import get_loaders 
 
 def eval_belebele(model, tokenizer, BATCH_SIZE=4, quantized=False):
-    #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"evaluating on belebele")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Set seeds for reproducibility
     seed_value = 42 
