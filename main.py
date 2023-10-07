@@ -10,7 +10,7 @@ from typing import Dict, Union, Tuple
 from importlib.metadata import version
 
 from lib.prune import prune_wanda, prune_magnitude, prune_sparsegpt, prune_ablate, check_sparsity, find_layers
-from lib.eval import eval_belebele
+from lib.eval import eval_belebele, eval_xquad
 
 print('torch', version('torch'))
 print('transformers', version('transformers'))
@@ -187,15 +187,16 @@ def main():
 
     # Chooses batch size for different model sizes
     batch_size = next((size for name, size in {
-        'bloom-560m': 4,
-        'bloom-1b7': 4,
-        'bloom-3b': 2,
+        'bloom-560m': 16,
+        'bloom-1b7': 8,
+        'bloom-3b': 4,
         'bloom-7b1': 1
     }.items() if name in model_path), 1)
 
-    answers = eval_belebele(model, tokenizer, BATCH_SIZE=batch_size, quantized=bool(args.quantize))
+    #answers = eval_belebele(model, tokenizer, BATCH_SIZE=batch_size, quantized=bool(args.quantize))
+    answers = eval_xquad(model, tokenizer, BATCH_SIZE=batch_size, quantized=bool(args.quantize))
 
-    with open(f'{args.save_model}/belebele.csv', 'w', newline='') as csvfile:
+    with open(f'{args.save_model}/xquad.csv', 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(['ID', 'Answer', 'Label'])
         for key, value in answers.items():

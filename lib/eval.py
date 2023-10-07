@@ -29,10 +29,6 @@ def eval_belebele(model, tokenizer, BATCH_SIZE=4, quantized=False):
     set_seed(seed_value)
 
     dataset = load_dataset("facebook/belebele", "spa_Latn", split='test')
-    #model = AutoModelForCausalLM.from_pretrained(model_directory)
-    #if not quantized:
-    #    model = model.to(device)
-    #tokenizer = AutoTokenizer.from_pretrained(model_directory)
     eos_token_id = tokenizer.eos_token_id
 
     answers = dict()
@@ -61,7 +57,7 @@ def eval_belebele(model, tokenizer, BATCH_SIZE=4, quantized=False):
         C) {answer_c}
         D) {answer_d}
 
-        ¿Cuál es la respuesta correcta: A, B, C o D?
+        ¿De las cuatro opciones (A, B, C o D), cuál es la respuesta correcta?
 
         Respuesta: '''
 
@@ -72,9 +68,9 @@ def eval_belebele(model, tokenizer, BATCH_SIZE=4, quantized=False):
 
             output_ids_batch = model.generate(
                 input_ids,
-                max_length=max([len(ids) for ids in input_ids]) + 10,  # adjust for each batch
+                max_length=max([len(ids) for ids in input_ids]) + 20,  # adjust for each batch
                 num_return_sequences=1,
-                top_k=1,
+                top_k=1, # greedy sampling
                 temperature=1,
                 eos_token_id=eos_token_id,
                 early_stopping=True,
@@ -84,6 +80,69 @@ def eval_belebele(model, tokenizer, BATCH_SIZE=4, quantized=False):
                 generated_tokens = output_ids[len(input_ids[j]):]
                 generated_text = tokenizer.decode(generated_tokens, skip_special_tokens=True)
                 answers[i - BATCH_SIZE + j + 1] = (generated_text, dataset['correct_answer_num'][i - BATCH_SIZE + j + 1])
+
+            # Reset input_texts for the next batch
+            input_texts = []
+
+    return answers
+
+def eval_xquad(model, tokenizer, BATCH_SIZE=4, quantized=False):
+    print(f"evaluating on XQUAD")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Set seeds for reproducibility
+    seed_value = 42 
+    random.seed(seed_value)
+    np.random.seed(seed_value)
+    torch.manual_seed(seed_value)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed_value)
+        torch.cuda.manual_seed_all(seed_value)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    set_seed(seed_value)
+
+    dataset = load_dataset("xquad", "xquad.es", split='validation')
+    eos_token_id = tokenizer.eos_token_id
+
+    answers = dict()
+    num_rows = dataset.num_rows
+    input_texts = []
+
+    for i in tqdm(range(num_rows)):
+        passage = dataset['context'][i]
+        question = dataset['question'][i]
+
+        input_text = f'''
+        Lee el siguiente texto y responde a la pregunta de manera concisa y breve.
+
+        Texto:
+        {passage}
+
+        Pregunta:
+        {question}
+
+        Respuesta breve: '''
+
+        input_texts.append(input_text)
+
+        if (i+1) % BATCH_SIZE == 0 or i == num_rows - 1:
+            input_ids = tokenizer.batch_encode_plus(input_texts, return_tensors='pt', padding=True)['input_ids'].to(device)
+
+            output_ids_batch = model.generate(
+                input_ids,
+                max_length=max([len(ids) for ids in input_ids]) + 30,  # adjust for each batch
+                num_return_sequences=1,
+                top_k=1, # greedy sampling
+                temperature=1,
+                eos_token_id=eos_token_id,
+                early_stopping=True,
+            )
+
+            for j, output_ids in enumerate(output_ids_batch):
+                generated_tokens = output_ids[len(input_ids[j]):]
+                generated_text = tokenizer.decode(generated_tokens, skip_special_tokens=True)
+                answers[dataset['id'][i - BATCH_SIZE + j + 1]] = (generated_text, dataset['answers'][i - BATCH_SIZE + j + 1])
 
             # Reset input_texts for the next batch
             input_texts = []
