@@ -1,4 +1,5 @@
 # Import necessary modules
+import csv
 from datasets import load_dataset
 import numpy as np
 import random
@@ -12,7 +13,7 @@ import torch.nn as nn
 # Import get_loaders function from data module within the same directory
 from .data import get_loaders 
 
-def eval_belebele(model, tokenizer, BATCH_SIZE=4, quantized=False):
+def eval_belebele(model, tokenizer, BATCH_SIZE=4):
     print(f"evaluating on belebele")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -86,7 +87,7 @@ def eval_belebele(model, tokenizer, BATCH_SIZE=4, quantized=False):
 
     return answers
 
-def eval_xquad(model, tokenizer, BATCH_SIZE=4, quantized=False):
+def eval_xquad(model, tokenizer, BATCH_SIZE=4):
     print(f"evaluating on XQUAD")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -148,6 +149,98 @@ def eval_xquad(model, tokenizer, BATCH_SIZE=4, quantized=False):
             input_texts = []
 
     return answers
+
+def create_batched_sentences(sentence1_list, candidate, sentence2_list):
+    return [f"{s1}, ¿verdad? {candidate}, {s2}" for s1, s2 in zip(sentence1_list, sentence2_list)]
+
+def get_candidate_position(sentence1, tokenizer):
+    length_sentence1 = len(tokenizer.encode(sentence1, add_special_tokens=False))
+    length_verdad = len(tokenizer.encode(", ¿verdad?", add_special_tokens=False))
+    return length_sentence1 + length_verdad
+
+def get_batched_sentence_log_probabilities(sentences, tokenizer, model, device=torch.device("cuda:0")):
+    epsilon = 1e-09 # to avoid log(0)
+    input_ids = tokenizer(sentences, return_tensors="pt", padding=True).input_ids.to(device)
+
+    # Identify the position after the common prefix, which would be the token position of the candidate.
+    positions = [get_candidate_position(s1, tokenizer) for s1 in sentences]
+    
+    with torch.no_grad():
+        logits = model(input_ids).logits
+        probs = logits.softmax(dim=-1)
+        
+    token_probs = probs.gather(-1, input_ids.unsqueeze(-1)).squeeze()
+    log_probs = torch.log(token_probs + epsilon)
+    
+    # Extracting log_probs for tokens after the common prefix
+    log_probs_after_prefix = [log_probs[i, pos:].sum().item() for i, pos in enumerate(positions)]
+    
+    return log_probs_after_prefix
+
+def chunked_data(batch_size, *data_lists):
+    chunked_lists = ([data_list[i:i+batch_size] for i in range(0, len(data_list), batch_size)] 
+                     for data_list in data_lists)
+    return zip(*chunked_lists)
+
+def get_candidates_and_log_probs(batched_sentence1, batched_sentence2, candidates, tokenizer, model):
+    candidate_log_probs = {candidate: get_batched_sentence_log_probabilities(create_batched_sentences(batched_sentence1, candidate, batched_sentence2), tokenizer, model) 
+                           for candidate in candidates}
+    # Transpose the data to have the format [sentence1, sentence2, ...]
+    transposed_log_probs = list(zip(*candidate_log_probs.values()))
+    best_candidates = [candidates[log_probs.index(max(log_probs))] for log_probs in transposed_log_probs]
+    
+    return best_candidates, transposed_log_probs
+
+def eval_xnli(model, tokenizer, BATCH_SIZE=32):
+    print(f"evaluating on XNLI")
+
+    all_data = load_dataset("xtreme", "XNLI", split='validation')
+    dataset = all_data.filter(lambda x: x['language'] == 'es')
+    candidates = ["Sí", "No", "Además"]
+    all_results = []
+
+    # Calculate the total iterations for progress bar
+    total_iterations = dataset.num_rows // BATCH_SIZE + (dataset.num_rows % BATCH_SIZE != 0)
+
+    for bs1, bs2, blabels in tqdm(chunked_data(
+        BATCH_SIZE, 
+        dataset['sentence1'],
+        dataset['sentence2'],
+        dataset['gold_label']),
+        total = total_iterations,
+        desc = "processing batches"):
+        
+        best_candidates, batched_log_probs = get_candidates_and_log_probs(bs1, bs2, candidates, tokenizer, model)
+
+        for s1, s2, gold, predicted, log_probs in zip(bs1, bs2, blabels, best_candidates, batched_log_probs):
+            all_results.append([s1, s2, gold, predicted] + list(log_probs))
+
+    return all_results
+
+def eval_inferes(model, tokenizer, BATCH_SIZE=32):
+    print(f"evaluating on inferES")
+
+    dataset = load_dataset("venelin/inferes", split='test')
+    candidates = ["Sí", "No", "Además"]
+    all_results = []
+
+    # Calculate the total iterations for progress bar
+    total_iterations = dataset.num_rows // BATCH_SIZE + (dataset.num_rows % BATCH_SIZE != 0)
+
+    for bs1, bs2, blabels in tqdm(chunked_data(
+        BATCH_SIZE, 
+        dataset['Premise'],
+        dataset['Hypothesis'],
+        dataset['Label']),
+        total = total_iterations,
+        desc = "processing batches"):
+        
+        best_candidates, batched_log_probs = get_candidates_and_log_probs(bs1, bs2, candidates, tokenizer, model)
+
+        for s1, s2, gold, predicted, log_probs in zip(bs1, bs2, blabels, best_candidates, batched_log_probs):
+            all_results.append([s1, s2, gold, predicted] + list(log_probs))
+
+    return all_results
 
 # Function to evaluate perplexity (ppl) on a specified model and tokenizer
 def eval_ppl(model, tokenizer, device=torch.device("cuda:0")):
