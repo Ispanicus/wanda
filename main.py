@@ -10,7 +10,7 @@ from typing import Dict, Union, Tuple
 from importlib.metadata import version
 
 from lib.prune import prune_wanda, prune_magnitude, prune_sparsegpt, prune_ablate, check_sparsity, find_layers
-from lib.eval import eval_belebele, eval_xquad, eval_xnli, eval_inferes
+from lib.eval import eval_belebele, eval_xquad, eval_xnli, eval_inferes, eval_fs_belebele
 
 print('torch', version('torch'))
 print('transformers', version('transformers'))
@@ -188,26 +188,26 @@ def main():
     # Chooses batch size for different model sizes
     batch_size = next((size for name, size in {
         'bloom-560m': 16,
-        'bloom-1b7': 16,
+        'bloom-1b7': 8,
         'bloom-3b': 8,
         'bloom-7b1': 4
     }.items() if name in model_path), 1)
 
-    #answers = eval_belebele(model, tokenizer, BATCH_SIZE=batch_size) #,quantized=bool(args.quantize))
+    answers = eval_fs_belebele(model, tokenizer, BATCH_SIZE=batch_size) #,quantized=bool(args.quantize))
     #answers = eval_xquad(model, tokenizer, BATCH_SIZE=batch_size)
     
     #results = eval_xnli(model, tokenizer, BATCH_SIZE=batch_size)
-    results = eval_inferes(model, tokenizer, BATCH_SIZE=batch_size)
-    headers = ["Sentence1", "Sentence2", "Gold Label", "Predicted Candidate", "Sí", "No", "Además"]
-
-    with open(f'{args.save_model}/inferes.csv', 'w', newline='') as csvfile:
-        csvwriter = csv.writer(csvfile)
-        csvwriter.writerow(headers)
-        for row in results:
-            csvwriter.writerow(row)
+    #results = eval_inferes(model, tokenizer, BATCH_SIZE=batch_size)
+    #headers = ["Sentence1", "Sentence2", "Gold Label", "Predicted Candidate", "Sí", "No", "Además"]
+    if 'results' in locals():
+        with open(f'{args.save_model}/inferes.csv', 'w', newline='') as csvfile:
+            csvwriter = csv.writer(csvfile)
+            csvwriter.writerow(headers)
+            for row in results:
+                csvwriter.writerow(row)
 
     if 'answers' in locals():
-        with open(f'{args.save_model}/xquad.csv', 'w', newline='') as csvfile:
+        with open(f'{args.save_model}/fs_belebele.csv', 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow(['ID', 'Answer', 'Label'])
             for key, value in answers.items():

@@ -87,6 +87,96 @@ def eval_belebele(model, tokenizer, BATCH_SIZE=4):
 
     return answers
 
+def eval_fs_belebele(model, tokenizer, BATCH_SIZE=4):
+    print(f"evaluating on few-shot belebele")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Set seeds for reproducibility
+    seed_value = 42
+    random.seed(seed_value)
+    np.random.seed(seed_value)
+    torch.manual_seed(seed_value)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed_value)
+        torch.cuda.manual_seed_all(seed_value)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    set_seed(seed_value)
+
+    dataset = load_dataset("facebook/belebele", "spa_Latn", split='test')
+    eos_token_id = tokenizer.eos_token_id
+
+    answers = dict()
+    num_rows = dataset.num_rows
+    input_texts = []
+    letters = ['A', 'B', 'C', 'D']
+
+    for i in tqdm(range(num_rows)):
+        # Getting two random few-shot examples that don't share the same passage
+        random_indices = set()
+        while len(random_indices) < 2:
+            r = random.randint(0, num_rows - 1)
+            if abs(r - i) >= 5:
+                random_indices.add(r)
+
+        prefix = ""
+        for r in random_indices:
+            prefix += f'''
+            Texto:
+            {dataset['flores_passage'][r]}
+            
+            Pregunta:
+            {dataset['question'][r]}
+
+            A: {dataset['mc_answer1'][r]}
+            B: {dataset['mc_answer2'][r]}
+            C: {dataset['mc_answer3'][r]}
+            D: {dataset['mc_answer4'][r]}
+
+            Respuesta: {letters[dataset['correct_answer_num'][r]]}
+
+            '''
+
+        input_text = f'''
+        {prefix}
+        Texto:
+        {dataset['flores_passage'][i]}
+
+        Pregunta:
+        {dataset['question'][i]}
+
+        A: {dataset['mc_answer1'][i]}
+        B: {dataset['mc_answer2'][i]}
+        C: {dataset['mc_answer3'][i]}
+        D: {dataset['mc_answer4'][i]}
+
+        Respuesta: '''
+
+        input_texts.append(input_text)
+
+        if (i+1) % BATCH_SIZE == 0 or i == num_rows - 1:
+            input_ids = tokenizer.batch_encode_plus(input_texts, return_tensors='pt', padding=True)['input_ids'].to(device)
+
+            output_ids_batch = model.generate(
+                input_ids,
+                max_length=max([len(ids) for ids in input_ids]) + 20,  # adjust for each batch
+                num_return_sequences=1,
+                top_k=1, # greedy sampling
+                temperature=1,
+                eos_token_id=eos_token_id,
+                early_stopping=True,
+            )
+
+            for j, output_ids in enumerate(output_ids_batch):
+                generated_tokens = output_ids[len(input_ids[j]):]
+                generated_text = tokenizer.decode(generated_tokens, skip_special_tokens=True)
+                answers[i - BATCH_SIZE + j + 1] = (generated_text, dataset['correct_answer_num'][i - BATCH_SIZE + j + 1])
+
+            # Reset input_texts for the next batch
+            input_texts = []
+
+    return answers    
+
 def eval_xquad(model, tokenizer, BATCH_SIZE=4):
     print(f"evaluating on XQUAD")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -154,12 +244,12 @@ def create_batched_sentences(sentence1_list, candidate, sentence2_list):
     return [f"{s1}, ¿verdad? {candidate}, {s2}" for s1, s2 in zip(sentence1_list, sentence2_list)]
 
 def get_candidate_position(sentence1, tokenizer):
-    length_sentence1 = len(tokenizer.encode(sentence1, add_special_tokens=False))
-    length_verdad = len(tokenizer.encode(", ¿verdad?", add_special_tokens=False))
-    return length_sentence1 + length_verdad
+    prefix = f"{sentence1}, ¿verdad?"
+    tokenized_prefix = tokenizer.encode(prefix, add_special_tokens=False)
+    return len(tokenized_prefix)
 
 def get_batched_sentence_log_probabilities(sentences, tokenizer, model, device=torch.device("cuda:0")):
-    epsilon = 1e-09 # to avoid log(0)
+    epsilon = 1e-07
     input_ids = tokenizer(sentences, return_tensors="pt", padding=True).input_ids.to(device)
 
     # Identify the position after the common prefix, which would be the token position of the candidate.
@@ -170,11 +260,13 @@ def get_batched_sentence_log_probabilities(sentences, tokenizer, model, device=t
         probs = logits.softmax(dim=-1)
         
     token_probs = probs.gather(-1, input_ids.unsqueeze(-1)).squeeze()
-    log_probs = torch.log(token_probs + epsilon)
+
+    # to avoid log(0)
+    log_probs = torch.log(token_probs.clamp(min=epsilon))
     
-    # Extracting log_probs for tokens after the common prefix
-    log_probs_after_prefix = [log_probs[i, pos:].sum().item() for i, pos in enumerate(positions)]
-    
+    # Extracting log_probs for tokens after the common prefix and averaging probability over their length
+    log_probs_after_prefix = [(log_probs[i, pos:].sum() / (len(log_probs[i, pos:]) + epsilon)).item() for i, pos in enumerate(positions)]
+
     return log_probs_after_prefix
 
 def chunked_data(batch_size, *data_lists):
