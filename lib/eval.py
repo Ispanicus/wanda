@@ -109,7 +109,7 @@ def eval_fs_belebele(model, tokenizer, BATCH_SIZE=4):
     answers = dict()
     num_rows = dataset.num_rows
     input_texts = []
-    letters = ['A', 'B', 'C', 'D']
+    letters = ['','A', 'B', 'C', 'D']
 
     for i in tqdm(range(num_rows)):
         # Getting two random few-shot examples that don't share the same passage
@@ -133,7 +133,7 @@ def eval_fs_belebele(model, tokenizer, BATCH_SIZE=4):
             C: {dataset['mc_answer3'][r]}
             D: {dataset['mc_answer4'][r]}
 
-            Respuesta: {letters[dataset['correct_answer_num'][r]]}
+            Respuesta: {letters[int(dataset['correct_answer_num'][r])]}
 
             '''
 
@@ -159,7 +159,7 @@ def eval_fs_belebele(model, tokenizer, BATCH_SIZE=4):
 
             output_ids_batch = model.generate(
                 input_ids,
-                max_length=max([len(ids) for ids in input_ids]) + 20,  # adjust for each batch
+                max_length=max([len(ids) for ids in input_ids]) + 2,  # adjust for each batch
                 num_return_sequences=1,
                 top_k=1, # greedy sampling
                 temperature=1,

@@ -154,11 +154,10 @@ def main():
         elif "ablate" in args.prune_method:
             prune_ablate(args, model, tokenizer, device, prune_n=prune_n, prune_m=prune_m)
 
-    ################################################################
-    print("*"*30)
-    sparsity_ratio = check_sparsity(model)
-    print(f"sparsity sanity check {sparsity_ratio:.4f}")
-    print("*"*30)
+        print("*"*30)
+        sparsity_ratio = check_sparsity(model)
+        print(f"sparsity sanity check {sparsity_ratio:.4f}")
+        print("*"*30)
     ################################################################
     #ppl_train, ppl_test = eval_ppl(model, tokenizer, device)
     #print(f"original ppl on wikipedia_train {orig_ppl_train}, wikipedia_test {orig_ppl_test}")
