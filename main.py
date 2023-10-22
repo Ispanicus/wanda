@@ -189,7 +189,7 @@ def main():
         'bloom-560m': 16,
         'bloom-1b7': 8,
         'bloom-3b': 8,
-        'bloom-7b1': 4
+        'bloom-7b1': 1
     }.items() if name in model_path), 1)
 
     answers = eval_fs_belebele(model, tokenizer, BATCH_SIZE=batch_size) #,quantized=bool(args.quantize))
