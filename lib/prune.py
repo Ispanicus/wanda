@@ -335,91 +335,190 @@ def prune_wanda(args, model, tokenizer, device=torch.device("cuda:0"), prune_n=0
 @torch.no_grad()
 def prune_sparsegpt(args, model, tokenizer, dev, prune_n=0, prune_m=0):
     ## SparseGPT code available at: https://github.com/IST-DASLab/sparsegpt/tree/f5c25005a61f96a0933ca2f95705a963585aafaa
-    print('Starting ...')
-    dataloader, _ = get_loaders("c4",nsamples=args.nsamples,seed=args.seed,seqlen=model.seqlen,tokenizer=tokenizer)
+    print('loading calibration data')
+    dataloader, _ = get_loaders("wikipedia",nsamples=args.nsamples,seed=args.seed,seqlen=model.seqlen,tokenizer=tokenizer)
+    print('dataset loading complete')
 
     use_cache = model.config.use_cache
     model.config.use_cache = False
-    layers = model.model.layers
 
-    if "model.embed_tokens" in model.hf_device_map:
-        dev = model.hf_device_map["model.embed_tokens"]
+    if "bloom" in args.model:
 
-    dtype = next(iter(model.parameters())).dtype
-    inps = torch.zeros(
-        (args.nsamples, model.seqlen, model.config.hidden_size), dtype=dtype, device=dev
-    )
-    cache = {'i': 0, 'attention_mask': None, "position_ids": None}
-
-    class Catcher(nn.Module):
-        def __init__(self, module):
-            super().__init__()
-            self.module = module
-        def forward(self, inp, **kwargs):
-            inps[cache['i']] = inp
-            cache['i'] += 1
-            cache['attention_mask'] = kwargs['attention_mask']
-            cache['position_ids'] = kwargs['position_ids']
-            raise ValueError
-    layers[0] = Catcher(layers[0])
-    for batch in dataloader:
-        try:
-            model(batch[0].to(dev))
-        except ValueError:
+        # --- from SparseGPT source code ---
+        def skip(*args, **kwargs):
             pass
-    layers[0] = layers[0].module
-    torch.cuda.empty_cache()
+        torch.nn.init.kaiming_uniform_ = skip
+        torch.nn.init.uniform_ = skip
+        torch.nn.init.normal_ = skip
+        model.seqlen = 2048
+        # ------
 
-    outs = torch.zeros_like(inps)
-    attention_mask = cache['attention_mask']
-    position_ids = cache['position_ids']
+        layers = next((m for m in model.modules() if isinstance(m, torch.nn.ModuleList)), None)
 
-    print('Ready.')
+        # Probably not needed for bloom?
+        if "model.embed_tokens" in model.hf_device_map:
+            dev = model.hf_device_map["model.embed_tokens"]
 
-    for i in range(len(layers)):
-        layer = layers[i]
-        if f"model.layers.{i}" in model.hf_device_map:
-            dev = model.hf_device_map[f"model.layers.{i}"]
-            print(f"layer {i} device {dev}")
-            inps, outs, attention_mask, position_ids = inps.to(dev), outs.to(dev), attention_mask.to(dev), position_ids.to(dev)
+        dtype = next(iter(model.parameters())).dtype
+        inps = torch.zeros(
+            (args.nsamples, model.seqlen, model.config.hidden_size), dtype=dtype, device=dev
+        )
+        cache = {'i': 0, 'attention_mask': None, "position_ids": None}
 
-        subset = find_layers(layer)
+        class Catcher(nn.Module):
+            def __init__(self, module):
+                super().__init__()
+                self.module = module
+            def forward(self, inp, **kwargs):
+                inps[cache['i']] = inp
+                cache['i'] += 1
+                cache['attention_mask'] = kwargs['attention_mask']
+                cache['alibi'] = kwargs['alibi'] # changed this to alibi
+                raise ValueError
+        # SparseGPT also adds word_embeddings and word_embeddings_layernorm to dev and then to cpu after next line
 
-        gpts = {}
-        for name in subset:
-            gpts[name] = SparseGPT(subset[name])
-
-        def add_batch(name):
-            def tmp(_, inp, out):
-                gpts[name].add_batch(inp[0].data, out.data)
-            return tmp
-
-        handles = []
-        for name in gpts:
-            handles.append(subset[name].register_forward_hook(add_batch(name)))
-
-        for j in range(args.nsamples):
-            outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask, position_ids=position_ids)[0]
-        for h in handles:
-            h.remove()
-
-        for name in gpts:
-            print(i, name)
-            print('Pruning ...')
-
-            gpts[name].fasterprune(args.sparsity_ratio, prune_n=prune_n, prune_m=prune_m, percdamp=0.01, blocksize=128)
-            gpts[name].free()
-
-        for j in range(args.nsamples):
-            outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask, position_ids=position_ids)[0]
-
-        layers[i] = layer 
+        layers[0] = Catcher(layers[0]) 
+        for batch in dataloader:
+            try:
+                model(batch[0].to(dev))
+            except ValueError:
+                pass
+        layers[0] = layers[0].module
         torch.cuda.empty_cache()
 
-        inps, outs = outs, inps
+        outs = torch.zeros_like(inps)
+        attention_mask = cache['attention_mask']
+        alibi = cache['alibi'] # changed to alibi
 
-    model.config.use_cache = use_cache
-    torch.cuda.empty_cache()
+        print('Ready.')
+
+        for i in range(len(layers)):
+            layer = layers[i]
+            if f"model.layers.{i}" in model.hf_device_map:
+                dev = model.hf_device_map[f"model.layers.{i}"]
+                print(f"layer {i} device {dev}")
+                inps, outs, attention_mask, alibi = inps.to(dev), outs.to(dev), attention_mask.to(dev), alibi.to(dev)
+
+            subset = find_layers(layer)
+
+            gpts = {}
+            for name in subset:
+                gpts[name] = SparseGPT(subset[name])
+
+            def add_batch(name):
+                def tmp(_, inp, out):
+                    gpts[name].add_batch(inp[0].data, out.data)
+                return tmp
+
+            handles = []
+            for name in gpts:
+                handles.append(subset[name].register_forward_hook(add_batch(name)))
+
+            for j in range(args.nsamples):
+                outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask, alibi=alibi)[0]
+            for h in handles:
+                h.remove()
+
+            for name in gpts:
+                print(i, name)
+                print('Pruning ...')
+
+                gpts[name].fasterprune(args.sparsity_ratio, prune_n=prune_n, prune_m=prune_m, percdamp=0.01, blocksize=128) 
+                gpts[name].free() # Not sure what this line does
+
+            for j in range(args.nsamples):
+                outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask, alibi=alibi)[0]
+
+            layers[i] = layer 
+            torch.cuda.empty_cache()
+
+            inps, outs = outs, inps
+
+        model.config.use_cache = use_cache
+        torch.cuda.empty_cache()
+    
+    else:
+
+        layers = model.model.layers
+
+        if "model.embed_tokens" in model.hf_device_map:
+            dev = model.hf_device_map["model.embed_tokens"]
+
+        dtype = next(iter(model.parameters())).dtype
+        inps = torch.zeros(
+            (args.nsamples, model.seqlen, model.config.hidden_size), dtype=dtype, device=dev
+        )
+        cache = {'i': 0, 'attention_mask': None, "position_ids": None}
+
+        class Catcher(nn.Module):
+            def __init__(self, module):
+                super().__init__()
+                self.module = module
+            def forward(self, inp, **kwargs):
+                inps[cache['i']] = inp
+                cache['i'] += 1
+                cache['attention_mask'] = kwargs['attention_mask']
+                cache['position_ids'] = kwargs['position_ids']
+                raise ValueError
+        layers[0] = Catcher(layers[0])
+        for batch in dataloader:
+            try:
+                model(batch[0].to(dev))
+            except ValueError:
+                pass
+        layers[0] = layers[0].module
+        torch.cuda.empty_cache()
+
+        outs = torch.zeros_like(inps)
+        attention_mask = cache['attention_mask']
+        position_ids = cache['position_ids']
+
+        print('Ready.')
+
+        for i in range(len(layers)):
+            layer = layers[i]
+            if f"model.layers.{i}" in model.hf_device_map:
+                dev = model.hf_device_map[f"model.layers.{i}"]
+                print(f"layer {i} device {dev}")
+                inps, outs, attention_mask, position_ids = inps.to(dev), outs.to(dev), attention_mask.to(dev), position_ids.to(dev)
+
+            subset = find_layers(layer)
+
+            gpts = {}
+            for name in subset:
+                gpts[name] = SparseGPT(subset[name])
+
+            def add_batch(name):
+                def tmp(_, inp, out):
+                    gpts[name].add_batch(inp[0].data, out.data)
+                return tmp
+
+            handles = []
+            for name in gpts:
+                handles.append(subset[name].register_forward_hook(add_batch(name)))
+
+            for j in range(args.nsamples):
+                outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask, position_ids=position_ids)[0]
+            for h in handles:
+                h.remove()
+
+            for name in gpts:
+                print(i, name)
+                print('Pruning ...')
+
+                gpts[name].fasterprune(args.sparsity_ratio, prune_n=prune_n, prune_m=prune_m, percdamp=0.01, blocksize=128)
+                gpts[name].free()
+
+            for j in range(args.nsamples):
+                outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask, position_ids=position_ids)[0]
+
+            layers[i] = layer 
+            torch.cuda.empty_cache()
+
+            inps, outs = outs, inps
+
+        model.config.use_cache = use_cache
+        torch.cuda.empty_cache()
 
 
 
