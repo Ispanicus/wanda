@@ -20,7 +20,7 @@ def get_wikipedia(nsamples, seed, seqlen, tokenizer):
     # Load train and test datasets
     traindata = load_dataset("graelo/wikipedia", "20230601.es", split='train')
 
-    with open ('../BLOOM_Lottery/wiki.txt', 'r') as file:
+    with open ('wiki.txt', 'r') as file:
         urls = [line.strip() for line in file.readlines()]
         urls = set(urls)
 

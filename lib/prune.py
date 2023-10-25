@@ -2,7 +2,6 @@ import time
 import heapq 
 import torch 
 import torch.nn as nn
-import bitsandbytes
 from tqdm import tqdm
 from .sparsegpt import SparseGPT 
 from .layerwrapper import WrappedGPT
@@ -10,7 +9,7 @@ from .data import get_loaders
 
 from .ablate import AblateGPT 
 
-def find_layers(module, layers={nn.Linear, bitsandbytes.nn.Linear8bitLt}, name=''):
+def find_layers(module, layers={nn.Linear}, name=''): #bitsandbytes.nn.Linear8bitLt
     """
     Recursively find the layers of a certain type in a module.
 
