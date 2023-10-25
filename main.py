@@ -9,8 +9,8 @@ from safetensors.torch import storage_ptr, storage_size
 from typing import Dict, Union, Tuple
 from importlib.metadata import version
 
-from lib.prune import prune_wanda, prune_magnitude, prune_sparsegpt, prune_ablate, check_sparsity, find_layers
-from lib.eval import eval_belebele, eval_xquad, eval_xnli, eval_inferes, eval_fs_belebele
+from lib.prune import prune_wanda, prune_magnitude, prune_sparsegpt, prune_ablate, check_sparsity
+from lib.eval import eval_xquad, eval_ppl
 
 print('torch', version('torch'))
 print('transformers', version('transformers'))
@@ -159,9 +159,9 @@ def main():
         print(f"sparsity sanity check {sparsity_ratio:.4f}")
         print("*"*30)
     ################################################################
-    #ppl_train, ppl_test = eval_ppl(model, tokenizer, device)
+    ppl_train, ppl_test = eval_ppl(model, tokenizer, device)
     #print(f"original ppl on wikipedia_train {orig_ppl_train}, wikipedia_test {orig_ppl_test}")
-    #print(f"ppl on wikipedia_train {ppl_train}, wikipedia_test {ppl_test}")
+    print(f"ppl on wikipedia_train {ppl_train}, wikipedia_test {ppl_test}")
 
     if args.save:
         if not os.path.exists(args.save):
@@ -189,28 +189,29 @@ def main():
         'bloom-560m': 16,
         'bloom-1b7': 8,
         'bloom-3b': 8,
-        'bloom-7b1': 1
+        'bloom-7b1': 2
     }.items() if name in model_path), 1)
 
-    answers = eval_fs_belebele(model, tokenizer, BATCH_SIZE=batch_size) #,quantized=bool(args.quantize))
-    #answers = eval_xquad(model, tokenizer, BATCH_SIZE=batch_size)
+    #answers = eval_fs_belebele(model, tokenizer, BATCH_SIZE=batch_size) #,quantized=bool(args.quantize))
+    answers = eval_xquad(model, tokenizer, BATCH_SIZE=batch_size)
     
     #results = eval_xnli(model, tokenizer, BATCH_SIZE=batch_size)
     #results = eval_inferes(model, tokenizer, BATCH_SIZE=batch_size)
     #headers = ["Sentence1", "Sentence2", "Gold Label", "Predicted Candidate", "Sí", "No", "Además"]
-    if 'results' in locals():
-        with open(f'{args.save_model}/inferes.csv', 'w', newline='') as csvfile:
-            csvwriter = csv.writer(csvfile)
-            csvwriter.writerow(headers)
-            for row in results:
-                csvwriter.writerow(row)
 
     if 'answers' in locals():
-        with open(f'{args.save_model}/fs_belebele.csv', 'w', newline='') as csvfile:
+        with open(f'{args.save_model}/xquad.csv', 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow(['ID', 'Answer', 'Label'])
             for key, value in answers.items():
                 writer.writerow([key] + list(value))
+
+    if 'results' in locals():
+        with open(f'{args.save_model}/xnli.csv', 'w', newline='') as csvfile:
+            csvwriter = csv.writer(csvfile)
+            csvwriter.writerow(headers)
+            for row in results:
+                csvwriter.writerow(row)
 
 if __name__ == '__main__':
     main()
