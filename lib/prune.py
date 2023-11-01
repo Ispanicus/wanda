@@ -391,8 +391,8 @@ def prune_sparsegpt(args, model, tokenizer, dev, prune_n=0, prune_m=0):
 
         print('Ready.')
 
-        for i in range(len(layers)):
-            layer = layers[i]
+        for  i, layer in enumerate(tqdm(layers)):
+            # layer = layers[i]
             if f"model.layers.{i}" in model.hf_device_map:
                 dev = model.hf_device_map[f"model.layers.{i}"]
                 print(f"layer {i} device {dev}")

@@ -10,7 +10,7 @@ from typing import Dict, Union, Tuple
 from importlib.metadata import version
 
 from lib.prune import prune_wanda, prune_magnitude, prune_sparsegpt, prune_ablate, check_sparsity
-from lib.eval import eval_xquad, eval_ppl
+from lib.eval import eval_xquad, eval_ppl, eval_zero_shot
 
 print('torch', version('torch'))
 print('transformers', version('transformers'))
@@ -198,6 +198,10 @@ def main():
     #results = eval_xnli(model, tokenizer, BATCH_SIZE=batch_size)
     #results = eval_inferes(model, tokenizer, BATCH_SIZE=batch_size)
     #headers = ["Sentence1", "Sentence2", "Gold Label", "Predicted Candidate", "Sí", "No", "Además"]
+    results = eval_zero_shot(args.model, model, tokenizer)
+    print("*"*30)
+    print(f"Zero shot evaluation results for {model_name}, {sparsity_ratio:.4f} sparsity")
+    print(results)
 
     if 'answers' in locals():
         with open(f'{args.save_model}/xquad.csv', 'w', newline='') as csvfile:
@@ -205,13 +209,14 @@ def main():
             writer.writerow(['ID', 'Answer', 'Label'])
             for key, value in answers.items():
                 writer.writerow([key] + list(value))
+    
 
-    if 'results' in locals():
-        with open(f'{args.save_model}/xnli.csv', 'w', newline='') as csvfile:
-            csvwriter = csv.writer(csvfile)
-            csvwriter.writerow(headers)
-            for row in results:
-                csvwriter.writerow(row)
+    # if 'results' in locals():
+    #     with open(f'{args.save_model}/xnli.csv', 'w', newline='') as csvfile:
+    #         csvwriter = csv.writer(csvfile)
+    #         csvwriter.writerow(headers)
+    #         for row in results:
+    #             csvwriter.writerow(row)
 
 if __name__ == '__main__':
     main()
