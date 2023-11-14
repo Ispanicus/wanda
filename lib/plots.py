@@ -92,12 +92,16 @@ def main():
     magnitude_df = update_prune_ratios(pd.read_csv('../results/magnitude_results.csv'))
     sparsegpt_df = update_prune_ratios(pd.read_csv('../results/sparsegpt_results.csv'))
     wanda_df = update_prune_ratios(pd.read_csv('../results/wanda_results.csv'))
+    base_df = pd.read_csv('../results/noprune_results.csv')
+    base_df["prune_ratio"] = 0
 
     avg_magnitude_df = calculate_averages(magnitude_df)
     avg_sparsegpt_df = calculate_averages(sparsegpt_df)
     avg_wanda_df = calculate_averages(wanda_df)
+    avg_base_df = calculate_averages(base_df)
 
     combined_df = pd.concat([
+        avg_base_df.assign(method='Base'),
         avg_magnitude_df.assign(method='Magnitude'),
         avg_sparsegpt_df.assign(method='SparseGPT'),
         avg_wanda_df.assign(method='Wanda')
@@ -110,7 +114,8 @@ def main():
         language_data[language_code] = {
             'Magnitude': prepare_language_data(magnitude_df, language_code),
             'SparseGPT': prepare_language_data(sparsegpt_df, language_code),
-            'Wanda': prepare_language_data(wanda_df, language_code)
+            'Wanda': prepare_language_data(wanda_df, language_code),
+            'Base': prepare_language_data(base_df, language_code)
         }
 
     # First, we calculate the confidence intervals for each method.
