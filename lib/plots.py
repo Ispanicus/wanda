@@ -18,8 +18,8 @@ def calculate_averages(df):
     return df[['prune_ratio', 'average_accuracy', 'average_stderr']]
 
 def prepare_language_data(df, language_code):
-    accuracy_columns = [col for col in df.columns if col.endswith(f'_acc') and language_code in col]
-    stderr_columns = [col for col in df.columns if col.endswith(f'_acc_stderr') and language_code in col]
+    accuracy_columns = [col for col in df.columns if col.endswith(f'_acc') and language_code in col and not col.startswith('headqa')]
+    stderr_columns = [col for col in df.columns if col.endswith(f'_acc_stderr') and language_code in col and not col.startswith('headqa')]
     df[f'{language_code}_average_accuracy'] = df[accuracy_columns].mean(axis=1)
     df[f'{language_code}_average_stderr'] = df[stderr_columns].mean(axis=1)
     return df[['prune_ratio', f'{language_code}_average_accuracy', f'{language_code}_average_stderr']]
