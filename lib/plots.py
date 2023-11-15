@@ -143,7 +143,6 @@ def main():
         avg_wanda_df.assign(method='Wanda')
     ])
 
-    # Prepare data for each language
     languages = ['en', 'es', 'zh']
     language_data = {}
     for language_code in languages:
@@ -154,7 +153,6 @@ def main():
             'Base': prepare_language_data(base_df, language_code)
         }
 
-    # First, we calculate the confidence intervals for each method.
     combined_df['lower'] = combined_df['average_accuracy'] - combined_df['average_stderr']
     combined_df['upper'] = combined_df['average_accuracy'] + combined_df['average_stderr']
 
