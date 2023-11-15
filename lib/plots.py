@@ -1,5 +1,6 @@
 import seaborn as sns
 import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
 import pandas as pd
 import numpy as np
 
@@ -23,10 +24,10 @@ def prepare_language_data(df, language_code):
     df[f'{language_code}_average_stderr'] = df[stderr_columns].mean(axis=1)
     return df[['prune_ratio', f'{language_code}_average_accuracy', f'{language_code}_average_stderr']]
 
-def plot_errorbar(combined_df_no_duplicates):
+def plot_errorbar(df):
     plt.figure(figsize=(12, 8))
-    for method in combined_df_no_duplicates['method'].unique():
-        method_data = combined_df_no_duplicates[combined_df_no_duplicates['method'] == method]
+    for method in df['method'].unique():
+        method_data = df[df['method'] == method]
         plt.errorbar(method_data['prune_ratio'], method_data['average_accuracy'], 
                      yerr=method_data['average_stderr'], label=method, fmt='o', alpha=0.8, linestyle='', capsize=3)
 
@@ -36,19 +37,35 @@ def plot_errorbar(combined_df_no_duplicates):
     plt.legend(title='Pruning Method')
     plt.show()
 
-def plot_lineplot_with_confidence(combined_df_no_duplicates):
+def plot_lineplot_with_confidence(df):
     plt.figure(figsize=(14, 8))
-    sns.lineplot(data=combined_df_no_duplicates, x='prune_ratio', y='average_accuracy', hue='method', 
+    
+    non_base_df = df[df['method'] != 'Base']
+    sns.lineplot(data=non_base_df, x='prune_ratio', y='average_accuracy', hue='method', 
                  style='method', markers=True, dashes=False, err_style="band")
 
-    for method in combined_df_no_duplicates['method'].unique():
-        method_data = combined_df_no_duplicates[combined_df_no_duplicates['method'] == method]
+    for method in non_base_df['method'].unique():
+        method_data = non_base_df[non_base_df['method'] == method]
         plt.fill_between(method_data['prune_ratio'], method_data['lower'], method_data['upper'], alpha=0.2)
 
+    base_df = df[df['method'] == 'Base']
+    if not base_df.empty:
+        base_accuracy = base_df['average_accuracy'].iloc[0]
+        base_stderr = base_df['average_stderr'].iloc[0]
+        plt.hlines(y=base_accuracy, xmin=0.1, xmax=0.9, color='darkred', linestyle='--', linewidth=2)
+        plt.fill_betweenx(y=[base_accuracy - base_stderr, base_accuracy + base_stderr], x1=0.1, x2=0.9, color='darkred', alpha=0.2)
+   
+    plt.xticks([0.1, 0.3, 0.5, 0.7, 0.9])
+    plt.xlim([0.09, 0.91])
+ 
+    handles, _ = plt.gca().get_legend_handles_labels()
+    base_legend = mlines.Line2D([], [], color='darkred', linestyle='--', linewidth=2, label='Base Model')
+    handles.append(base_legend)
+
+    plt.legend(handles=handles, title='Pruning Method', loc='lower left') 
     plt.title('Average Accuracy by Sparsity Level for Each Pruning Method')
     plt.xlabel('Sparsity Ratio')
     plt.ylabel('Average Accuracy')
-    plt.legend(title='Pruning Method')
     plt.show()
 
 def plot_multi_line_language(language_data, languages):
