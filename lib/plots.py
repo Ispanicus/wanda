@@ -52,53 +52,76 @@ def plot_lineplot_with_confidence(combined_df_no_duplicates):
     plt.show()
 
 def plot_multi_line_language(language_data, languages):
-    fig, axes = plt.subplots(1, 3, figsize=(21, 7), sharey=True)
+    fig, axes = plt.subplots(1, 3, figsize=(21, 7), sharey=False)  # Set sharey to False
+    specific_xticks = [0.1, 0.3, 0.5, 0.7, 0.9]
+    global_min, global_max = float('inf'), float('-inf')
 
-    for i, language_code in enumerate(languages):
-        ax = axes[i]
+    # First pass to determine the global y-limits
+    for language_code in languages:
         for method in language_data[language_code]:
             method_data = language_data[language_code][method]
-            sns.lineplot(ax=ax, data=method_data, x='prune_ratio', 
-                         y=f'{language_code}_average_accuracy', label=method)
+            global_min = min(global_min, method_data[f'{language_code}_average_accuracy'].min())
+            global_max = max(global_max, method_data[f'{language_code}_average_accuracy'].max())
+
+    # Define a margin for the y-limits
+    margin = (global_max - global_min) * 0.1
+    global_min -= margin
+    global_max += margin
+
+    # Second pass to plot and set uniform y-limits
+    for i, language_code in enumerate(languages):
+        ax = axes[i]
+        ax.set_xticks(specific_xticks)
+        ax.set_ylim(global_min, global_max)
+
+        for method in language_data[language_code]:
+            method_data = language_data[language_code][method]
+            if len(method_data) == 1 and method == 'Base':
+                ax.hlines(y=method_data[f'{language_code}_average_accuracy'].values, xmin=0, xmax=1,
+                          colors='#d62728', linestyles='dotted', label=method, linewidth=2)
+            else:
+                sns.lineplot(ax=ax, data=method_data, x='prune_ratio',
+                             y=f'{language_code}_average_accuracy', label=method)
 
         ax.set_title(f'Performance for {language_code.upper()} tasks')
+        ax.set_xlim([0.1, 0.9])
         ax.set_xlabel('Prune Ratio')
-        ax.set_ylabel('Average Accuracy' if i == 0 else '')
+        ax.set_ylabel('Average Accuracy')
         ax.legend(title='Pruning Method')
 
     plt.suptitle('Pruning Method Performance Split by Language')
     plt.tight_layout()
     plt.show()
 
-import matplotlib.pyplot as plt
-import numpy as np
-
 def plot_grouped_bar_chart(grouped_data):
-    methods = grouped_data['method'].unique()
-    prune_ratios = sorted(grouped_data['prune_ratio'].unique())
-    bar_width = 0.15
-    space_between_groups = 0.05
-    total_bar_width = len(methods) * bar_width
-    
+    # Filter out the 'Base' method data
+    base_data = grouped_data[grouped_data['method'] == 'Base']
+    non_base_data = grouped_data[grouped_data['method'] != 'Base']
+
+    # Unique prune ratios and methods (excluding 'Base')
+    unique_prune_ratios = non_base_data['prune_ratio'].unique()
+    unique_methods = non_base_data['method'].unique()
+
+    positions = np.arange(len(unique_prune_ratios))
+    bar_width = 0.25
+
     plt.figure(figsize=(15, 8))
-    
-    for i, method in enumerate(methods):
-        method_data = grouped_data[grouped_data['method'] == method]
-        
-        x_pos = np.array([prune_ratios.index(ratio) for ratio in method_data['prune_ratio']])
-        x_pos = x_pos - total_bar_width / 2 + i * bar_width + (space_between_groups / 2)
-        
-        plt.bar(x_pos, method_data['average_accuracy'], width=bar_width, label=method,
+
+    # Plot the 'Base' method data as a horizontal line
+    for _, row in base_data.iterrows():
+        plt.axhline(y=row['average_accuracy'], color='darkred', linestyle='dotted', label='Base' if 'Base' not in plt.gca().get_legend_handles_labels()[1] else "")
+
+    # Plot other methods
+    for i, method in enumerate(unique_methods):
+        method_data = non_base_data[non_base_data['method'] == method]
+        plt.bar(positions + i * bar_width, method_data['average_accuracy'], width=bar_width, label=method,
                 yerr=method_data['average_stderr'], capsize=5)
-        
-    plt.xticks(np.arange(len(prune_ratios)), prune_ratios)
-    
+
+    plt.xticks(positions + bar_width * (len(unique_methods) - 1) / 2, unique_prune_ratios)
     plt.xlabel('Prune Ratio')
     plt.ylabel('Average Accuracy')
     plt.title('Average Accuracies of Different Pruning Methods at Each Pruning Ratio')
-    
     plt.legend(title='Pruning Method')
-    
     plt.show()
 
 def main():
