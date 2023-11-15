@@ -69,9 +69,16 @@ def plot_lineplot_with_confidence(df):
     plt.show()
 
 def plot_multi_line_language(language_data, languages):
-    fig, axes = plt.subplots(1, 3, figsize=(21, 7), sharey=False)  # Set sharey to False
+    _, axes = plt.subplots(1, 3, figsize=(21, 7), sharey=False)  # Set sharey to False
     specific_xticks = [0.1, 0.3, 0.5, 0.7, 0.9]
     global_min, global_max = float('inf'), float('-inf')
+
+    # Font size settings
+    title_fontsize = 16
+    label_fontsize = 14
+    tick_fontsize = 12
+    legend_fontsize = 12
+    suptitle_fontsize = 18
 
     # First pass to determine the global y-limits
     for language_code in languages:
@@ -100,13 +107,14 @@ def plot_multi_line_language(language_data, languages):
                 sns.lineplot(ax=ax, data=method_data, x='prune_ratio',
                              y=f'{language_code}_average_accuracy', label=method)
 
-        ax.set_title(f'Performance for {language_code.upper()} tasks')
+        ax.set_title(f'Performance for {language_code.upper()} tasks', fontsize=title_fontsize)
         ax.set_xlim([0.1, 0.9])
-        ax.set_xlabel('Prune Ratio')
-        ax.set_ylabel('Average Accuracy')
-        ax.legend(title='Pruning Method')
+        ax.set_xlabel('Prune Ratio', fontsize=label_fontsize)
+        ax.set_ylabel('Average Accuracy', fontsize=label_fontsize)
+        ax.legend(title='Pruning Method', fontsize=legend_fontsize)
+        ax.tick_params(axis='both', which='major', labelsize=tick_fontsize)
 
-    plt.suptitle('Pruning Method Performance Split by Language')
+    plt.suptitle('Pruning Method Performance Split by Language', fontsize=suptitle_fontsize)
     plt.tight_layout()
     plt.show()
 
