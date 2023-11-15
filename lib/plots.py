@@ -70,22 +70,35 @@ def plot_multi_line_language(language_data, languages):
     plt.tight_layout()
     plt.show()
 
+import matplotlib.pyplot as plt
+import numpy as np
+
 def plot_grouped_bar_chart(grouped_data):
-    positions = np.arange(len(grouped_data['prune_ratio'].unique()))
-    bar_width = 0.25
-
+    methods = grouped_data['method'].unique()
+    prune_ratios = sorted(grouped_data['prune_ratio'].unique())
+    bar_width = 0.15
+    space_between_groups = 0.05
+    total_bar_width = len(methods) * bar_width
+    
     plt.figure(figsize=(15, 8))
-
-    for i, method in enumerate(grouped_data['method'].unique()):
+    
+    for i, method in enumerate(methods):
         method_data = grouped_data[grouped_data['method'] == method]
-        plt.bar(positions + i * bar_width, method_data['average_accuracy'], width=bar_width, label=method,
+        
+        x_pos = np.array([prune_ratios.index(ratio) for ratio in method_data['prune_ratio']])
+        x_pos = x_pos - total_bar_width / 2 + i * bar_width + (space_between_groups / 2)
+        
+        plt.bar(x_pos, method_data['average_accuracy'], width=bar_width, label=method,
                 yerr=method_data['average_stderr'], capsize=5)
-
-    plt.xticks(positions + bar_width, grouped_data['prune_ratio'].unique())
+        
+    plt.xticks(np.arange(len(prune_ratios)), prune_ratios)
+    
     plt.xlabel('Prune Ratio')
     plt.ylabel('Average Accuracy')
     plt.title('Average Accuracies of Different Pruning Methods at Each Pruning Ratio')
+    
     plt.legend(title='Pruning Method')
+    
     plt.show()
 
 def main():
