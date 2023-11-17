@@ -24,6 +24,20 @@ def prepare_language_data(df, language_code):
     df[f'{language_code}_average_stderr'] = df[stderr_columns].mean(axis=1)
     return df[['prune_ratio', f'{language_code}_average_accuracy', f'{language_code}_average_stderr']]
 
+def update_and_average(df, prune_ratios, languages):
+    df = df.rename(columns={'Unnamed: 0': 'prune_ratio'})
+    df['prune_ratio'] = prune_ratios
+    for lang in languages:
+        acc_cols = [col for col in df.columns if col.endswith(f'{lang}_acc')]
+        df[f'{lang}_average_accuracy'] = df[acc_cols].mean(axis=1)
+    return df
+
+def calculate_relative_accuracies(df, base_df, languages):
+    for lang in languages:
+        base_accuracy = base_df[f'{lang}_average_accuracy'][0]  # baseline accuracy
+        df[f'{lang}_relative_accuracy'] = df[f'{lang}_average_accuracy'].apply(lambda x: (x - base_accuracy) / base_accuracy)
+    return df
+
 def plot_errorbar(df):
     plt.figure(figsize=(12, 8))
     for method in df['method'].unique():
@@ -69,34 +83,16 @@ def plot_lineplot_with_confidence(df):
     plt.show()
 
 def plot_multi_line_language(language_data, languages):
-    _, axes = plt.subplots(1, 3, figsize=(21, 7), sharey=False)  # Set sharey to False
-    specific_xticks = [0.1, 0.3, 0.5, 0.7, 0.9]
-    global_min, global_max = float('inf'), float('-inf')
+    _, axes = plt.subplots(1, len(languages), figsize=(21, 7), sharey=True)
 
-    # Font size settings
     title_fontsize = 16
     label_fontsize = 14
     tick_fontsize = 12
     legend_fontsize = 12
     suptitle_fontsize = 18
 
-    # First pass to determine the global y-limits
-    for language_code in languages:
-        for method in language_data[language_code]:
-            method_data = language_data[language_code][method]
-            global_min = min(global_min, method_data[f'{language_code}_average_accuracy'].min())
-            global_max = max(global_max, method_data[f'{language_code}_average_accuracy'].max())
-
-    # Define a margin for the y-limits
-    margin = (global_max - global_min) * 0.1
-    global_min -= margin
-    global_max += margin
-
-    # Second pass to plot and set uniform y-limits
     for i, language_code in enumerate(languages):
         ax = axes[i]
-        ax.set_xticks(specific_xticks)
-        ax.set_ylim(global_min, global_max)
 
         for method in language_data[language_code]:
             method_data = language_data[language_code][method]
@@ -109,6 +105,8 @@ def plot_multi_line_language(language_data, languages):
 
         ax.set_title(f'Performance for {language_code.upper()} tasks', fontsize=title_fontsize)
         ax.set_xlim([0.1, 0.9])
+        ax.set_ylim([0.4, 0.65])
+        ax.yaxis.set_tick_params(labelleft=True)
         ax.set_xlabel('Prune Ratio', fontsize=label_fontsize)
         ax.set_ylabel('Average Accuracy', fontsize=label_fontsize)
         ax.legend(title='Pruning Method', fontsize=legend_fontsize)
@@ -119,11 +117,9 @@ def plot_multi_line_language(language_data, languages):
     plt.show()
 
 def plot_grouped_bar_chart(grouped_data):
-    # Filter out the 'Base' method data
     base_data = grouped_data[grouped_data['method'] == 'Base']
     non_base_data = grouped_data[grouped_data['method'] != 'Base']
 
-    # Unique prune ratios and methods (excluding 'Base')
     unique_prune_ratios = non_base_data['prune_ratio'].unique()
     unique_methods = non_base_data['method'].unique()
 
@@ -132,11 +128,9 @@ def plot_grouped_bar_chart(grouped_data):
 
     plt.figure(figsize=(15, 8))
 
-    # Plot the 'Base' method data as a horizontal line
     for _, row in base_data.iterrows():
         plt.axhline(y=row['average_accuracy'], color='darkred', linestyle='dotted', label='Base' if 'Base' not in plt.gca().get_legend_handles_labels()[1] else "")
 
-    # Plot other methods
     for i, method in enumerate(unique_methods):
         method_data = non_base_data[non_base_data['method'] == method]
         plt.bar(positions + i * bar_width, method_data['average_accuracy'], width=bar_width, label=method,
@@ -147,6 +141,32 @@ def plot_grouped_bar_chart(grouped_data):
     plt.ylabel('Average Accuracy')
     plt.title('Average Accuracies of Different Pruning Methods at Each Pruning Ratio')
     plt.legend(title='Pruning Method')
+    plt.show()
+
+def plot_relative_accuracy_subplots(dfs, languages):
+    _, axes = plt.subplots(1, 3, figsize=(21, 7), sharey=True)
+
+    title_fontsize = 16
+    label_fontsize = 14
+    tick_fontsize = 12
+    legend_fontsize = 12
+    suptitle_fontsize = 18
+
+    colors = {'en': '#1f77b4', 'es': '#ff7f0e', 'zh': '#2ca02c'}
+    language_labels = {'en': 'English', 'es': 'Spanish', 'zh': 'Chinese'}
+
+    for ax, (method, df) in zip(axes, dfs.items()):
+        for lang in languages:
+            sns.lineplot(ax=ax, x='prune_ratio', y=f'{lang}_relative_accuracy', data=df, label=f'{language_labels[lang]}', color=colors[lang])
+        ax.set_title(f'{method} Pruning', fontsize=title_fontsize)
+        ax.set_xlabel('Prune Ratio', fontsize=label_fontsize)
+        ax.set_ylabel('Relative Accuracy', fontsize=label_fontsize)
+        ax.axhline(0, color='black', linewidth=0.8, linestyle='--')
+        ax.tick_params(axis='both', which='major', labelsize=tick_fontsize)
+        ax.legend(title="Language", fontsize=legend_fontsize)
+
+    plt.suptitle('Relative Accuracy from Baseline by Language for Different Pruning Methods', fontsize=suptitle_fontsize)
+    plt.tight_layout()
     plt.show()
 
 def main():
@@ -190,6 +210,24 @@ def main():
     plot_errorbar(combined_df)
     plot_lineplot_with_confidence(combined_df)
     plot_multi_line_language(language_data, languages)
+
+    prune_ratios = [0.1, 0.3, 0.5, 0.7, 0.9]
+    sparsegpt_df = update_and_average(sparsegpt_df, prune_ratios, languages)
+    wanda_df = update_and_average(wanda_df, prune_ratios, languages)
+    magnitude_df = update_and_average(magnitude_df, prune_ratios, languages)
+    base_df = update_and_average(base_df, [0], languages)
+
+    sparsegpt_relative = calculate_relative_accuracies(sparsegpt_df, base_df, languages)
+    wanda_relative = calculate_relative_accuracies(wanda_df, base_df, languages)
+    magnitude_relative = calculate_relative_accuracies(magnitude_df, base_df, languages)
+
+    dfs = {
+        'SparseGPT': sparsegpt_relative,
+        'Wanda': wanda_relative,
+        'Magnitude': magnitude_relative
+    }
+
+    plot_relative_accuracy_subplots(dfs, languages)
 
 if __name__ == "__main__":
     main()
