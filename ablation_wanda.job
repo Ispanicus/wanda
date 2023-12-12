@@ -1,0 +1,38 @@
+#!/bin/bash
+
+#SBATCH --account=researchers
+#SBATCH --job-name=wanda_bloom7b1_ablation    # Job name
+#SBATCH --output=logs/R-%x.%j.out      # Name of output file (%j expands to jobId)
+#SBATCH --error=logs/R-%x.%j.err     # Error handling
+#SBATCH --nodelist=desktop17
+#SBATCH --nodes=1                # Total number of nodes requested
+#SBATCH --cpus-per-task=8        # Schedule 8 cores (includes hyperthreading)
+#SBATCH --gres=gpu             # Schedule a GPU
+#SBATCH --time=3-00:00:00          # Run time (hh:mm:ss) - run for one hour max
+#SBATCH --partition=brown    # Run on either the red or brown queue
+
+#srun hostname
+
+source activate torchenv
+
+OUTFILE="logs/outfile7b1_ablation_wanda.txt"
+PRUNE_METHODS=("wanda" "magnitude")
+SPARSITY_RATIOS=(0 0.1 0.3 0.5 0.7 0.9)
+
+# Loop through the prune methods
+for PRUNE_METHOD in "${PRUNE_METHODS[@]}"; do
+    # Loop through the sparsity ratios
+    for SPARSITY_RATIO in "${SPARSITY_RATIOS[@]}"; do
+        (time python3 main.py \
+            --model bigscience/bloom-7b1 \
+            --prune_method $PRUNE_METHOD \
+            --sparsity_ratio $SPARSITY_RATIO \
+            --sparsity_type unstructured \
+            --save_model pruned_models/bloom-7b1/${PRUNE_METHOD}-${SPARSITY_RATIO} \
+            --save pruned_models/bloom-7b1/${PRUNE_METHOD}-${SPARSITY_RATIO}) 2>> $OUTFILE
+        
+        # Write the completed combination to the output file
+        echo "${PRUNE_METHOD} with sparsity ratio ${SPARSITY_RATIO} completed" >> $OUTFILE
+    done
+done
+
